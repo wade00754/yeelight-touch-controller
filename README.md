@@ -64,6 +64,32 @@ Ensure the active `lv_conf.h` contains these settings:
 
 The current local installation stores this file at `libraries/lvgl/src/lv_conf.h`. For a fresh installation, follow the configuration layout of the supplied library package. The sketch uses `esp_timer` to call `lv_tick_inc()` every 2 ms and calls `lv_timer_handler()` in its main loop.
 
+## Enable Yeelight LAN Control
+
+For compatible bulbs whose Mi Home app does not expose LAN Control, use the following setup procedure. Support depends on the bulb model and firmware.
+
+### Retrieve the bulb's IP and token
+
+Pair the bulb in Mi Home first. Use [Xiaomi Cloud Tokens Extractor](https://github.com/PiotrMachowski/Xiaomi-cloud-tokens-extractor) to retrieve its device token. Find the bulb in the results and record its IP address and token.
+
+### Enable LAN Control with python-miio
+
+On a computer connected to the bulb's local network, install Python and [python-miio](https://github.com/rytilahti/python-miio), then run:
+
+```sh
+python -m pip install python-miio
+miiocli yeelight --ip BULB_IP --token BULB_TOKEN set_developer_mode 1
+```
+
+Replace `BULB_IP` and `BULB_TOKEN` with the retrieved values. A successful response typically looks like:
+
+```text
+Setting developer mode to True
+['ok']
+```
+
+Set `kLightIp` in `secrets.h` to that bulb's current LAN address and leave `kYeelightPort` at `55443`. The token is used for this setup command only; the ESP32 firmware uses Yeelight LAN Control directly and does not need the token or Xiaomi account credentials in `secrets.h`.
+
 ## Configure, build, and upload
 
 1. Keep the folder named `Mi_Light_UI_Simulator` and open `Mi_Light_UI_Simulator.ino` in Arduino IDE.
@@ -91,8 +117,6 @@ Normal command responses and light notifications are printed to Serial Monitor b
 | `secrets.example.h` | Configuration template with example IP and default preferences |
 | `secrets.h` | Local Wi-Fi credentials, light address, and preferences; excluded from Git |
 | `.gitignore` | Excludes credentials, build output, and a local utility |
-
-The original `token_extractor.exe` is retained locally but excluded from Git. It can be deleted if you no longer need the standalone tool. This firmware does not invoke it and requires no Mi Home account, device token, or token extraction utility.
 
 ## Troubleshooting
 
