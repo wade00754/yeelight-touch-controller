@@ -67,9 +67,9 @@ The current local installation stores this file at `libraries/lvgl/src/lv_conf.h
 ## Configure, build, and upload
 
 1. Keep the folder named `Mi_Light_UI_Simulator` and open `Mi_Light_UI_Simulator.ino` in Arduino IDE.
-2. For a fresh checkout, copy `secrets.example.h` to `secrets.h` and set `kWifiSsid` and `kWifiPassword`. The migrated local copy already retains its existing credentials. Git ignores `secrets.h`.
+2. For a fresh checkout, copy `secrets.example.h` to `secrets.h` and set `kWifiSsid`, `kWifiPassword`, and `kLightIp`. The migrated local copy already retains its existing credentials. Git ignores `secrets.h`.
 3. Leaving the SSID empty calls `WiFi.begin()` to try credentials already stored in ESP32 NVS. The sketch uses `WiFi.persistent(false)`, so do not assume credentials supplied by this sketch will be saved to NVS.
-4. Set `kLightIp` in the sketch to the light's address; the default is `192.168.0.48`. `kYeelightPort` defaults to `55443`. The light must support and have Yeelight LAN Control enabled. Place it and the ESP32 on a mutually reachable local network; a DHCP reservation helps keep its address stable.
+4. Set `kLightIp` in `secrets.h` to the light's address; the template uses a placeholder address. `kYeelightPort` defaults to `55443`. Display timeout (`kScreenTimeoutMs`) and swipe sensitivity (`kSwipeThresholdPixels`, `kPixelsPerBrightnessPercent`) are also configured in `secrets.h`; keep these values positive. The light must support and have Yeelight LAN Control enabled. Place it and the ESP32 on a mutually reachable local network; a DHCP reservation helps keep its address stable.
 5. Select `ESP32S3 Dev Module` and the board's COM port. Compare board options with the settings image in the official Arduino guide. Use 16 MB Flash and QSPI PSRAM for this board. For serial logging through its onboard USB-to-UART bridge, set USB CDC On Boot to Disabled.
 6. Select **Verify** to compile, then **Upload**. Open Serial Monitor at **115200 baud**.
 7. Check for `[WIFI] Connected` and `[LIGHT]` messages. Test power toggling, brightness gestures, and waking the display after it becomes idle.
@@ -88,11 +88,11 @@ Normal command responses and light notifications are printed to Serial Monitor b
 | --- | --- |
 | `Mi_Light_UI_Simulator.ino` | LVGL UI, gestures, display sleep, Wi-Fi, and light control |
 | `CST816S.h` / `CST816S.cpp` | Bundled touch driver |
-| `secrets.example.h` | Credential-free configuration template |
-| `secrets.h` | Local Wi-Fi credentials; excluded from Git |
+| `secrets.example.h` | Configuration template with example IP and default preferences |
+| `secrets.h` | Local Wi-Fi credentials, light address, and preferences; excluded from Git |
 | `.gitignore` | Excludes credentials, build output, and a local utility |
 
-The original `token_extractor.exe` is retained locally but excluded from Git. This firmware does not invoke it and requires no Mi Home account, device token, or token extraction utility.
+The original `token_extractor.exe` is retained locally but excluded from Git. It can be deleted if you no longer need the standalone tool. This firmware does not invoke it and requires no Mi Home account, device token, or token extraction utility.
 
 ## Troubleshooting
 
@@ -105,7 +105,7 @@ The original `token_extractor.exe` is retained locally but excluded from Git. Th
 | Upload failure or missing COM port | Check the data cable, CH343 USB-to-UART driver, and selected port; use the documented BOOT/RESET procedure if download mode is needed |
 | Repeated `[WIFI]` reconnection messages | Check credentials, 2.4 GHz Wi-Fi availability, and signal strength |
 | `[LIGHT] Cannot connect` | Check the light's IP, LAN Control, TCP port 55443, and router client isolation |
-| Screen becomes black after 5 seconds | This is the default timeout; change `kScreenTimeoutMs` to adjust it |
+| Screen becomes black after 5 seconds | This is the default timeout; change `kScreenTimeoutMs` in `secrets.h` to adjust it |
 
 ## Licensing and references
 

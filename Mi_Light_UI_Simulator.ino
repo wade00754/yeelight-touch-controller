@@ -19,20 +19,11 @@ namespace {
 constexpr uint16_t kScreenWidth = 240;
 constexpr uint16_t kScreenHeight = 240;
 constexpr uint32_t kLvglTickPeriodMs = 2;
-constexpr uint32_t kScreenTimeoutMs = 5UL * 1000UL;
 constexpr uint8_t kTouchIrqPin = 5;
 constexpr uint8_t kDisplaySleepInCommand = 0x10;
 constexpr uint8_t kDisplaySleepOutCommand = 0x11;
 constexpr uint8_t kDisplayOffCommand = 0x28;
 constexpr uint8_t kDisplayOnCommand = 0x29;
-constexpr int16_t kSwipeThresholdPixels = 24;
-constexpr int16_t kPixelsPerBrightnessPercent = 2;
-
-// 若 ESP32 尚未儲存過這個 Wi-Fi，請填入區網的 SSID 與密碼。
-// 留空時會嘗試使用 ESP32 NVS 中上次成功連線的 Wi-Fi。
-
-const IPAddress kLightIp(192, 168, 0, 48);
-constexpr uint16_t kYeelightPort = 55443;
 constexpr uint32_t kWifiConnectTimeoutMs = 10000;
 constexpr uint32_t kWifiReconnectIntervalMs = 5000;
 constexpr uint32_t kLightReconnectIntervalMs = 1500;
@@ -45,7 +36,7 @@ struct LightState {
 };
 
 TFT_eSPI display(kScreenWidth, kScreenHeight);
-CST816S touch(6, 7, 13, 5);  // SDA, SCL, RST, IRQ
+CST816S touch(6, 7, 13, kTouchIrqPin);  // SDA, SCL, RST, IRQ
 
 lv_disp_draw_buf_t drawBuffer;
 lv_color_t pixelBuffer[kScreenWidth * kScreenHeight / 10];
@@ -70,23 +61,16 @@ struct TouchGestureState {
   bool verticalSwipe;
   int16_t startX;
   int16_t startY;
-  int16_t currentX;
-  int16_t currentY;
   uint8_t startBrightness;
 };
 
-TouchGestureState touchGesture{false, false, 0, 0, 0, 0, 50};
+TouchGestureState touchGesture{};
 
 void setLightPower(bool power);
 void setLightBrightness(uint8_t brightness);
 void renderLightState();
 void handleTouchEvent(int16_t x, int16_t y, uint8_t event);
-void setScreenAwake(bool awake);
 void wakeScreen();
-void turnOffScreen();
-void connectToWiFi();
-void serviceLightControl();
-bool syncLightStateFromBulb();
 
 void displayFlush(lv_disp_drv_t *displayDriver, const lv_area_t *area, lv_color_t *colorPixels) {
   const uint32_t width = area->x2 - area->x1 + 1;
@@ -392,14 +376,9 @@ void handleTouchEvent(int16_t x, int16_t y, uint8_t event) {
     touchGesture.verticalSwipe = false;
     touchGesture.startX = x;
     touchGesture.startY = y;
-    touchGesture.currentX = x;
-    touchGesture.currentY = y;
     touchGesture.startBrightness = lightState.brightness;
     return;
   }
-
-  touchGesture.currentX = x;
-  touchGesture.currentY = y;
 
   if (event == 2 || event == 1) {
     updateBrightnessFromSwipe(x, y);
@@ -409,8 +388,8 @@ void handleTouchEvent(int16_t x, int16_t y, uint8_t event) {
     return;
   }
 
-  const int16_t totalX = abs(touchGesture.currentX - touchGesture.startX);
-  const int16_t totalY = abs(touchGesture.currentY - touchGesture.startY);
+  const int16_t totalX = abs(x - touchGesture.startX);
+  const int16_t totalY = abs(y - touchGesture.startY);
 
   if (touchGesture.verticalSwipe) {
     Serial.printf("[UI] Swipe brightness: %u%%\n", lightState.brightness);
@@ -435,28 +414,22 @@ void renderLightState() {
   }
   lv_label_set_text(brightnessLabel, brightnessText);
 
+  // OFF 仍保留亮度高度，以深琥珀色表示目前燈泡已關閉。
+  const int16_t fillHeight = map(lightState.brightness, 1, 100, 2, kScreenHeight);
+  lv_obj_set_size(brightnessFill, kScreenWidth, fillHeight);
+  lv_obj_align(brightnessFill, LV_ALIGN_BOTTOM_MID, 0, 0);
+
   if (lightState.power) {
-    const int16_t fillHeight = map(lightState.brightness, 1, 100, 2, kScreenHeight);
-    lv_obj_clear_flag(brightnessFill, LV_OBJ_FLAG_HIDDEN);
-    lv_obj_set_size(brightnessFill, kScreenWidth, fillHeight);
-    lv_obj_align(brightnessFill, LV_ALIGN_BOTTOM_MID, 0, 0);
     lv_obj_set_style_bg_color(brightnessFill, lv_color_hex(0xF5B800), LV_PART_MAIN);
 
     // 黃色越過螢幕中央時，中央數字改成深色以維持清楚對比。
     const uint32_t textColor = lightState.brightness >= 50 ? 0x17130A : 0xF2F4F7;
     lv_obj_set_style_text_color(brightnessLabel, lv_color_hex(textColor), LV_PART_MAIN);
   } else {
-    // OFF 仍保留亮度高度，以深琥珀色表示目前燈泡已關閉。
-    const int16_t fillHeight = map(lightState.brightness, 1, 100, 2, kScreenHeight);
-    lv_obj_clear_flag(brightnessFill, LV_OBJ_FLAG_HIDDEN);
-    lv_obj_set_size(brightnessFill, kScreenWidth, fillHeight);
-    lv_obj_align(brightnessFill, LV_ALIGN_BOTTOM_MID, 0, 0);
     lv_obj_set_style_bg_color(brightnessFill, lv_color_hex(0x4A3A12), LV_PART_MAIN);
     lv_obj_set_style_text_color(brightnessLabel, lv_color_hex(0xE5D9B6), LV_PART_MAIN);
   }
 
-  lv_obj_set_style_text_opa(brightnessLabel, LV_OPA_COVER, LV_PART_MAIN);
-  lv_obj_move_foreground(brightnessLabel);
 }
 
 void createUserInterface() {
@@ -468,19 +441,14 @@ void createUserInterface() {
   // 整個螢幕就是亮度條，黃色從底部依目前亮度向上填滿。
   brightnessFill = lv_obj_create(screen);
   lv_obj_remove_style_all(brightnessFill);
-  lv_obj_set_size(brightnessFill, kScreenWidth, kScreenHeight / 2);
-  lv_obj_set_style_bg_color(brightnessFill, lv_color_hex(0xF5B800), LV_PART_MAIN);
   lv_obj_set_style_bg_opa(brightnessFill, LV_OPA_COVER, LV_PART_MAIN);
-  lv_obj_align(brightnessFill, LV_ALIGN_BOTTOM_MID, 0, 0);
   lv_obj_clear_flag(brightnessFill, LV_OBJ_FLAG_CLICKABLE);
 
   brightnessLabel = lv_label_create(screen);
-  lv_label_set_text(brightnessLabel, "50%");
   // 使用字型原生尺寸，避免 transform_zoom 在部分刷新時把 Label 裁掉。
   lv_obj_set_style_text_font(brightnessLabel, &lv_font_montserrat_28, LV_PART_MAIN);
   lv_obj_set_style_text_opa(brightnessLabel, LV_OPA_COVER, LV_PART_MAIN);
   lv_obj_center(brightnessLabel);
-  lv_obj_move_foreground(brightnessLabel);
 
   renderLightState();
 }
