@@ -92,6 +92,10 @@ Set `kLightIp` in `secrets.h` to that bulb's current LAN address and leave `kYee
 
 ## Configure, build, and upload
 
+Arduino IDE is optional. Use either the IDE workflow or the Arduino CLI workflow below; both require the same libraries and configuration described under [Dependencies](#dependencies).
+
+### Arduino IDE
+
 1. Keep the folder named `Mi_Light_UI_Simulator` and open `Mi_Light_UI_Simulator.ino` in Arduino IDE.
 2. For a fresh checkout, copy `secrets.example.h` to `secrets.h` and set `kWifiSsid`, `kWifiPassword`, and `kLightIp`. The migrated local copy already retains its existing credentials. Git ignores `secrets.h`.
 3. Leaving the SSID empty calls `WiFi.begin()` to try credentials already stored in ESP32 NVS. The sketch uses `WiFi.persistent(false)`, so do not assume credentials supplied by this sketch will be saved to NVS.
@@ -99,6 +103,76 @@ Set `kLightIp` in `secrets.h` to that bulb's current LAN address and leave `kYee
 5. Select `ESP32S3 Dev Module` and the board's COM port. Compare board options with the settings image in the official Arduino guide. Use 16 MB Flash and QSPI PSRAM for this board. For serial logging through its onboard USB-to-UART bridge, set USB CDC On Boot to Disabled.
 6. Select **Verify** to compile, then **Upload**. Open Serial Monitor at **115200 baud**.
 7. Check for `[WIFI] Connected` and `[LIGHT]` messages. Test power toggling, brightness gestures, and waking the display after it becomes idle.
+
+### Arduino CLI (without Arduino IDE)
+
+The examples below use **Windows PowerShell**. Install the standalone executable following the [Arduino CLI installation guide](https://docs.arduino.cc/arduino-cli/installation/), add its directory to `PATH`, and open a new terminal. Arduino IDE is not required.
+
+#### 1. Install the ESP32 core
+
+Check the CLI and create its configuration file on a fresh installation. If a configuration file already exists, skip `config init` and keep your existing settings.
+
+```powershell
+arduino-cli version
+arduino-cli config init
+arduino-cli config add board_manager.additional_urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
+arduino-cli core update-index
+arduino-cli core install esp32:esp32@2.0.12
+arduino-cli core list
+```
+
+Skip `config add` if that URL is already configured. The package index is the [official Espressif stable index](https://docs.espressif.com/projects/arduino-esp32/en/latest/installing.html). Keep the core at **2.0.12** for this project.
+
+#### 2. Prepare the libraries and local configuration
+
+Run `arduino-cli config dump` and check `directories.user`, the CLI's sketchbook directory. Place the Waveshare libraries from [Dependencies](#dependencies) in its `libraries` subdirectory: `lvgl`, `TFT_eSPI`, and `TFT_eSPI_Setups`. Apply the TFT_eSPI and LVGL settings above before compiling. If reusing an IDE installation, ensure the CLI points to the same sketchbook; for example, `arduino-cli config set directories.user "C:\Users\YOUR_USER_NAME\Documents\Arduino"` (replace the example path with your actual sketchbook).
+
+The libraries are not supplied by installing the ESP32 core. The bundled `CST816S.h` and `CST816S.cpp` stay in the project folder and need no separate installation.
+
+Change into your checkout, keeping its folder named `Mi_Light_UI_Simulator`. Replace the example path below. Create `secrets.h` only if it does not already exist:
+
+```powershell
+Set-Location "C:\path\to\Mi_Light_UI_Simulator"
+if (-not (Test-Path .\secrets.h)) {
+    Copy-Item .\secrets.example.h .\secrets.h
+}
+```
+
+Edit `secrets.h` with your editor and set `kWifiSsid`, `kWifiPassword`, and `kLightIp` as described in the IDE workflow. Enable Yeelight LAN Control before testing the firmware.
+
+#### 3. Select the board and compile
+
+Connect the board with a USB data cable, then inspect available ports and board options:
+
+```powershell
+arduino-cli board list
+arduino-cli board details --fqbn esp32:esp32:esp32s3
+$fqbn = "esp32:esp32:esp32s3:FlashSize=16M,PSRAM=enabled,CDCOnBoot=default"
+arduino-cli compile --fqbn $fqbn --output-dir .\build .
+```
+
+This FQBN selects **ESP32S3 Dev Module**, **16 MB Flash**, **QSPI PSRAM**, and **USB CDC On Boot: Disabled** for logging through the onboard USB-to-UART bridge. Other board options retain the core's defaults; flash size does not automatically select a 16 MB partition layout. These option names match ESP32 core 2.0.12. The build files go into the Git-ignored `build` directory.
+
+#### 4. Upload and read serial output
+
+Continue in the same PowerShell session so `$fqbn` remains defined. Replace `COM3` with the board's port from `board list`; an `Unknown` board name is acceptable when the port is correct and the FQBN is supplied explicitly. Close any serial monitor using that port first.
+
+Run upload only after compilation succeeds:
+
+```powershell
+$port = "COM3"
+arduino-cli upload --port $port --fqbn $fqbn --input-dir .\build .
+```
+
+Upload does not compile the sketch. After changing source code, libraries, board options, or `secrets.h`, rerun the compile command before uploading. After a successful upload, open the serial monitor:
+
+```powershell
+arduino-cli monitor --port $port --config baudrate=115200
+```
+
+Press the board's RESET button if you need to see startup messages. Check for `[WIFI] Connected` and `[LIGHT]` messages, then test the gestures and display timeout. Press **Ctrl+C** to close the monitor before the next upload. For missing ports or upload errors, see [Troubleshooting](#troubleshooting).
+
+See the [Arduino CLI getting started guide](https://docs.arduino.cc/arduino-cli/getting-started/) for general CLI usage.
 
 ## Connection behavior and limitations
 
