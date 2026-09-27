@@ -1,6 +1,6 @@
 # ESP32-S3 Yeelight Touch Controller
 
-An Arduino project that controls a Yeelight on the local network using the circular touchscreen on the Waveshare **ESP32-S3-Touch-LCD-1.28**. The sketch retains the name `Mi_Light_UI_Simulator`, but the current implementation sends commands to a real light over TCP.
+An Arduino project that controls a Yeelight on the local network using the circular touchscreen on the Waveshare **ESP32-S3-Touch-LCD-1.28**. The `yeelight-touch-controller.ino` sketch sends Yeelight LAN Control commands to a physical light over TCP.
 
 ## Features and gestures
 
@@ -14,7 +14,7 @@ An Arduino project that controls a Yeelight on the local network using the circu
 
 The [Waveshare product documentation](https://docs.waveshare.net/ESP32-S3-Touch-LCD-1.28/) identifies an ESP32-S3 board with 16 MB Flash, 2 MB PSRAM, and a 1.28-inch, 240 × 240 circular LCD. It uses a GC9A01A display controller and CST816S capacitive touch controller. The onboard QMI8658 IMU and battery features are not used by this sketch. Connect the board to a computer with a USB Type-C data cable for development.
 
-The following assignments come from this sketch and the locally installed Waveshare `Setup207_GC9A01.h`. These are onboard connections; no external display wiring is required.
+The following assignments come from this sketch and the Waveshare `Setup207_GC9A01.h` configuration. These are onboard connections; no external display wiring is required.
 
 | Signal | GPIO |
 | --- | --- |
@@ -29,7 +29,7 @@ The bundled touch driver uses I2C address `0x15` and is initialized as `CST816S 
 
 ## Dependencies
 
-The versions listed in the [Waveshare Arduino guide](https://docs.waveshare.net/ESP32-S3-Touch-LCD-1.28/Arduino/) match the locally installed dependencies:
+This project targets the following dependency versions and configuration. The [Waveshare Arduino guide](https://docs.waveshare.net/ESP32-S3-Touch-LCD-1.28/Arduino/) provides the board setup and example package:
 
 | Dependency | Version or configuration |
 | --- | --- |
@@ -49,7 +49,7 @@ Place `TFT_eSPI` and `TFT_eSPI_Setups` in your Arduino sketchbook's `libraries` 
 #include <../TFT_eSPI_Setups/Setup207_GC9A01.h>
 ```
 
-Disable other setup includes, including the default `User_Setup.h`. Do not select the similarly numbered `Setup207_LilyGo_T_HMI.h`. The local Waveshare setup uses `GC9A01_DRIVER`, a 240 × 240 resolution, an 80 MHz SPI clock, and the GPIO assignments above. Recheck the selection after library updates.
+Disable other setup includes, including the default `User_Setup.h`. Do not select the similarly numbered `Setup207_LilyGo_T_HMI.h`. The Waveshare setup uses `GC9A01_DRIVER`, a 240 × 240 resolution, an 80 MHz SPI clock, and the GPIO assignments above. Recheck the selection after library updates.
 
 ### LVGL configuration
 
@@ -62,7 +62,7 @@ Ensure the active `lv_conf.h` contains these settings:
 #define LV_TICK_CUSTOM 0
 ```
 
-The current local installation stores this file at `libraries/lvgl/src/lv_conf.h`. For a fresh installation, follow the configuration layout of the supplied library package. The sketch uses `esp_timer` to call `lv_tick_inc()` every 2 ms and calls `lv_timer_handler()` in its main loop.
+The Waveshare library package may place this file at `libraries/lvgl/src/lv_conf.h`. Follow the configuration layout of the library package you install and edit its active configuration file. The sketch uses `esp_timer` to call `lv_tick_inc()` every 2 ms and calls `lv_timer_handler()` in its main loop.
 
 ## Enable Yeelight LAN Control
 
@@ -96,8 +96,8 @@ Arduino IDE is optional. Use either the IDE workflow or the Arduino CLI workflow
 
 ### Arduino IDE
 
-1. Keep the folder named `Mi_Light_UI_Simulator` and open `Mi_Light_UI_Simulator.ino` in Arduino IDE.
-2. For a fresh checkout, copy `secrets.example.h` to `secrets.h` and set `kWifiSsid`, `kWifiPassword`, and `kLightIp`. The migrated local copy already retains its existing credentials. Git ignores `secrets.h`.
+1. Keep the checkout folder named `yeelight-touch-controller` and open `yeelight-touch-controller.ino` in Arduino IDE. Arduino requires the main sketch filename to match its folder name. Keep the bundled `.h` and `.cpp` files alongside the sketch.
+2. For a fresh checkout, copy `secrets.example.h` to `secrets.h` and set `kWifiSsid`, `kWifiPassword`, and `kLightIp`. If `secrets.h` already exists, keep your existing settings. Git ignores `secrets.h`.
 3. Leaving the SSID empty calls `WiFi.begin()` to try credentials already stored in ESP32 NVS. The sketch uses `WiFi.persistent(false)`, so do not assume credentials supplied by this sketch will be saved to NVS.
 4. Set `kLightIp` in `secrets.h` to the light's address; the template uses a placeholder address. `kYeelightPort` defaults to `55443`. Display timeout (`kScreenTimeoutMs`) and swipe sensitivity (`kSwipeThresholdPixels`, `kPixelsPerBrightnessPercent`) are also configured in `secrets.h`; keep these values positive. The light must support and have Yeelight LAN Control enabled. Place it and the ESP32 on a mutually reachable local network; a DHCP reservation helps keep its address stable.
 5. Select `ESP32S3 Dev Module` and the board's COM port. Compare board options with the settings image in the official Arduino guide. Use 16 MB Flash and QSPI PSRAM for this board. For serial logging through its onboard USB-to-UART bridge, set USB CDC On Boot to Disabled.
@@ -129,10 +129,10 @@ Run `arduino-cli config dump` and check `directories.user`, the CLI's sketchbook
 
 The libraries are not supplied by installing the ESP32 core. The bundled `CST816S.h` and `CST816S.cpp` stay in the project folder and need no separate installation.
 
-Change into your checkout, keeping its folder named `Mi_Light_UI_Simulator`. Replace the example path below. Create `secrets.h` only if it does not already exist:
+Change into your checkout, keeping its folder named `yeelight-touch-controller`. Replace the example path below. Create `secrets.h` only if it does not already exist:
 
 ```powershell
-Set-Location "C:\path\to\Mi_Light_UI_Simulator"
+Set-Location "C:\path\to\yeelight-touch-controller"
 if (-not (Test-Path .\secrets.h)) {
     Copy-Item .\secrets.example.h .\secrets.h
 }
@@ -176,7 +176,7 @@ See the [Arduino CLI getting started guide](https://docs.arduino.cc/arduino-cli/
 
 ## Connection behavior and limitations
 
-At startup, the sketch makes one `get_prop` request for `power` and `bright`. If it fails, the local UI starts at off and 50% brightness; these fallback values are not automatically sent to the light. Touch input updates the local UI first, then queues a `set_power` or `set_bright` command. Brightness commands are spaced at least 100 ms apart.
+At startup, the sketch attempts one `get_prop` request for `power` and `bright` if a connection can be established. If it fails, the local UI starts at off and 50% brightness; these fallback values are not automatically sent to the light. Touch input updates the local UI first, then queues a `set_power` or `set_bright` command. Brightness commands are spaced at least 100 ms apart.
 
 Wi-Fi reconnects after a disconnect. A TCP connection is established when a command needs to be sent, with connection attempts spaced at least 1.5 seconds apart. While disconnected, the sketch retains the latest pending state rather than a history of every gesture. Sending an off command clears pending brightness changes. State is held in RAM; rebooting triggers a new startup query.
 
@@ -186,7 +186,7 @@ Normal command responses and light notifications are printed to Serial Monitor b
 
 | File | Purpose |
 | --- | --- |
-| `Mi_Light_UI_Simulator.ino` | LVGL UI, gestures, display sleep, Wi-Fi, and light control |
+| `yeelight-touch-controller.ino` | LVGL UI, gestures, display sleep, Wi-Fi, and light control |
 | `CST816S.h` / `CST816S.cpp` | Bundled touch driver |
 | `secrets.example.h` | Configuration template with example IP and default preferences |
 | `secrets.h` | Local Wi-Fi credentials, light address, and preferences; excluded from Git |
