@@ -1,8 +1,8 @@
 /*
-  ESP32-S3-Touch-LCD-1.28 Yeelight 區網燈控
+  ESP32-S3-Touch-LCD-1.28 Yeelight LAN Controller
 
-  透過 Yeelight LAN Control 協定控制區網內的真實燈具。
-  在整個螢幕短按可切換開關；整個螢幕向上／向下滑可調整亮度。
+  Controls a physical light on the local network using the Yeelight LAN Control protocol.
+  Tap anywhere to toggle power; swipe up or down anywhere to adjust brightness.
 */
 
 #include <Arduino.h>
@@ -99,15 +99,15 @@ void touchRead(lv_indev_drv_t *inputDriver, lv_indev_data_t *data) {
   const uint32_t now = millis();
   const bool wokeScreenThisEvent = !screenAwake;
   if (!screenAwake) {
-    // ESP32 與觸控持續運作；第一次觸控會喚醒面板並繼續作為本次手勢。
+    // The ESP32 and touch controller stay active; the first touch wakes the panel and starts the gesture.
     wakeScreen();
     touchGesture.active = false;
   }
 
   lastInteractionMs = now;
 
-  // 若喚醒時收到的第一筆資料已是放開事件，就把它視為完整短按，
-  // 避免快速點擊只喚醒畫面卻沒有切換燈光。
+  // If the first event on wake is a release, treat it as a complete tap
+  // so a quick tap both wakes the screen and toggles the light.
   if (wokeScreenThisEvent && touch.data.event == 1) {
     setLightPower(!lightState.power);
     renderLightState();
@@ -121,7 +121,7 @@ void touchRead(lv_indev_drv_t *inputDriver, lv_indev_data_t *data) {
 
   handleTouchEvent(data->point.x, data->point.y, touch.data.event);
 
-  // CST816S: 0 = 按下、1 = 放開、2 = 持續接觸。
+  // CST816S: 0 = press, 1 = release, 2 = continued contact.
   if (touch.data.event == 1) {
     data->state = LV_INDEV_STATE_REL;
   }
@@ -335,7 +335,7 @@ void wakeScreen() {
 }
 
 void turnOffScreen() {
-  // IRQ 已為低表示正在觸控，不應在這個時刻關閉畫面。
+  // A low IRQ indicates an active touch; keep the screen on until it ends.
   if (digitalRead(kTouchIrqPin) == LOW) {
     lastInteractionMs = millis();
     return;
@@ -359,7 +359,7 @@ void updateBrightnessFromSwipe(int16_t x, int16_t y) {
 
   touchGesture.verticalSwipe = true;
 
-  // 向上滑 (deltaY < 0) 變亮；向下滑 (deltaY > 0) 變暗。
+  // Swiping up (deltaY < 0) increases brightness; swiping down (deltaY > 0) decreases it.
   const int16_t brightnessDelta = -deltaY / kPixelsPerBrightnessPercent;
   const int16_t targetBrightness = touchGesture.startBrightness + brightnessDelta;
   const uint8_t previousBrightness = lightState.brightness;
@@ -394,7 +394,7 @@ void handleTouchEvent(int16_t x, int16_t y, uint8_t event) {
   if (touchGesture.verticalSwipe) {
     Serial.printf("[UI] Swipe brightness: %u%%\n", lightState.brightness);
   } else if (totalX < kSwipeThresholdPixels && totalY < kSwipeThresholdPixels) {
-    // 任意位置的短按都切換電源，包含大型按鈕與亮度指示區域。
+    // A tap anywhere on the screen toggles power, including the brightness indicator.
     setLightPower(!lightState.power);
     renderLightState();
     Serial.printf("[UI] Tap power: %s, brightness: %u%%\n",
@@ -414,7 +414,7 @@ void renderLightState() {
   }
   lv_label_set_text(brightnessLabel, brightnessText);
 
-  // OFF 仍保留亮度高度，以深琥珀色表示目前燈泡已關閉。
+  // Preserve the fill height when OFF; dark amber indicates that the light is off.
   const int16_t fillHeight = map(lightState.brightness, 1, 100, 2, kScreenHeight);
   lv_obj_set_size(brightnessFill, kScreenWidth, fillHeight);
   lv_obj_align(brightnessFill, LV_ALIGN_BOTTOM_MID, 0, 0);
@@ -422,7 +422,7 @@ void renderLightState() {
   if (lightState.power) {
     lv_obj_set_style_bg_color(brightnessFill, lv_color_hex(0xF5B800), LV_PART_MAIN);
 
-    // 黃色越過螢幕中央時，中央數字改成深色以維持清楚對比。
+    // Use dark text when the yellow fill reaches the screen center to maintain contrast.
     const uint32_t textColor = lightState.brightness >= 50 ? 0x17130A : 0xF2F4F7;
     lv_obj_set_style_text_color(brightnessLabel, lv_color_hex(textColor), LV_PART_MAIN);
   } else {
@@ -438,14 +438,14 @@ void createUserInterface() {
   lv_obj_set_style_bg_color(screen, lv_color_hex(0x11151D), LV_PART_MAIN);
   lv_obj_set_style_bg_opa(screen, LV_OPA_COVER, LV_PART_MAIN);
 
-  // 整個螢幕就是亮度條，黃色從底部依目前亮度向上填滿。
+  // The screen acts as a brightness bar, filling upward from the bottom in yellow.
   brightnessFill = lv_obj_create(screen);
   lv_obj_remove_style_all(brightnessFill);
   lv_obj_set_style_bg_opa(brightnessFill, LV_OPA_COVER, LV_PART_MAIN);
   lv_obj_clear_flag(brightnessFill, LV_OBJ_FLAG_CLICKABLE);
 
   brightnessLabel = lv_label_create(screen);
-  // 使用字型原生尺寸，避免 transform_zoom 在部分刷新時把 Label 裁掉。
+  // Use the native font size to avoid label clipping from transform_zoom during partial refreshes.
   lv_obj_set_style_text_font(brightnessLabel, &lv_font_montserrat_28, LV_PART_MAIN);
   lv_obj_set_style_text_opa(brightnessLabel, LV_OPA_COVER, LV_PART_MAIN);
   lv_obj_center(brightnessLabel);
