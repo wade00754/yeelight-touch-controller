@@ -1,0 +1,15 @@
+# Local Wi-Fi credentials
+secrets.h
+
+# Optional local tool; not used by the firmware
+token_extractor.exe
+
+# Build output and editor state
+build/
+.pio/
+.vscode/
+*.bin
+*.elf
+*.map
+*.hex
+*.log
